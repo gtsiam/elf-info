@@ -8,9 +8,9 @@
  * any later version. See LICENSE file for more information.                  *
  ******************************************************************************/
 
-use std::path::PathBuf;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use regex::Regex;
+use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -29,11 +29,11 @@ pub enum Command {
     Summary,
 
     /// Display information in ELF's header.
-    #[clap(alias = "h")]
+    #[clap(visible_alias = "h")]
     Header,
 
     /// List all program headers.
-    #[clap(alias = "ph")]
+    #[clap(visible_alias = "ph")]
     ProgramHeader,
 
     /// List all sections.
@@ -41,18 +41,18 @@ pub enum Command {
 
     /// Display detailed information of one specific section, including its
     /// content. The formatting used depends on the type of section.
-    #[clap(alias = "sh")]
+    #[clap(visible_alias = "sh")]
     Section(SectionArgs),
 
     /// List all symbols.
-    #[clap(alias = "sym")]
+    #[clap(visible_alias = "sym")]
     Symbols(SymbolsArgs),
 
     /// Disassemble a function.
     Fn(FnArgs),
 
     /// List all relocation entries.
-    #[clap(alias = "rel")]
+    #[clap(visible_alias = "rel")]
     Relocations,
 
     /// Display call frame information for exception handling.
