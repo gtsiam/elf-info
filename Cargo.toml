@@ -24,12 +24,23 @@ name = "elf"
 path = "src/main.rs"
 
 [dependencies]
-clap = { version = "4.0", features = ["derive", "env"] }
-goblin = { version = "0.10.0", features = ["elf64"] }
+clap.workspace = true
+goblin.workspace = true
 gimli = "0.31.1"
 anyhow = "1.0"
 memmap2 = "0.9.5"
 rustc-demangle = "0.1.21"
-regex = "1.6"
+regex.workspace = true
 iced-x86 = "1.17"
 byteorder = "1.4.3"
+
+[build-dependencies]
+goblin.workspace = true
+regex.workspace = true
+clap.workspace = true
+clap_complete = "4.5.51"
+
+[workspace.dependencies]
+clap = { version = "4.0", features = ["derive", "env"] }
+goblin = { version = "0.10.0", features = ["elf64"] }
+regex = "1.6"
