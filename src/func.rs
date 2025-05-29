@@ -8,19 +8,21 @@
  * any later version. See LICENSE file for more information.                  *
  ******************************************************************************/
 
-use std::cell::RefCell;
-use std::collections::HashMap;
-use goblin::elf::Elf;
 use anyhow::{anyhow, Context, Result};
-use gimli::{BaseAddresses, CallFrameInstruction, EhFrame, EndianSlice,
-            FrameDescriptionEntry, LittleEndian, Register, SectionBaseAddresses,
-            UnwindSection};
+use gimli::{
+    BaseAddresses, CallFrameInstruction, EhFrame, EndianSlice, FrameDescriptionEntry, LittleEndian,
+    Reader, Register, SectionBaseAddresses, UnwindSection,
+};
 use goblin::container::Container;
 use goblin::elf::sym::STT_FUNC;
-use iced_x86::{Decoder, DecoderOptions, Formatter, FormatterOutput,
-               FormatterTextKind, GasFormatter, Instruction, IntelFormatter,
-               SymbolResolver, SymbolResult};
+use goblin::elf::Elf;
+use iced_x86::{
+    Decoder, DecoderOptions, Formatter, FormatterOutput, FormatterTextKind, GasFormatter,
+    Instruction, IntelFormatter, SymbolResolver, SymbolResult,
+};
 use rustc_demangle::demangle;
+use std::cell::RefCell;
+use std::collections::HashMap;
 
 use crate::args::{FnArgs, Syntax};
 use crate::eh::EhInstrContext;
@@ -35,23 +37,25 @@ pub fn do_fn(elf: &Elf, bytes: &[u8], args: &FnArgs) -> Result<()> {
             .context(anyhow!("couldn't parse memory address '{}'", args.name))?;
         find_symbol_by_addr(&elf.syms, addr).zip(Some(&elf.strtab))
     } else {
-        find_symbol(&elf.syms, &elf.strtab, &args.name).zip(Some(&elf.strtab))
-            .or_else(|| find_symbol(&elf.dynsyms, &elf.dynstrtab, &args.name).zip(Some(&elf.dynstrtab)))
-    }.ok_or_else(||
-        anyhow!("couldn't find any symbol matching {:?}", args.name)
-    )?;
+        find_symbol(&elf.syms, &elf.strtab, &args.name)
+            .zip(Some(&elf.strtab))
+            .or_else(|| {
+                find_symbol(&elf.dynsyms, &elf.dynstrtab, &args.name).zip(Some(&elf.dynstrtab))
+            })
+    }
+    .ok_or_else(|| anyhow!("couldn't find any symbol matching {:?}", args.name))?;
 
     let sym_name = strtab.get_at(sym.st_name).unwrap();
 
     if sym.st_type() != STT_FUNC {
         println!(
-            "\x1b[93mwarning\x1b[0m: Symbol {sym_name:?} has type {}", sym_type(sym.st_type())
+            "\x1b[93mwarning\x1b[0m: Symbol {sym_name:?} has type {}",
+            sym_type(sym.st_type())
         );
     }
 
-    let file_off = symbol_file_offset(elf, sym_name).ok_or_else(||
-        anyhow!("couldn't find the file offset")
-    )? as usize;
+    let file_off = symbol_file_offset(elf, sym_name)
+        .ok_or_else(|| anyhow!("couldn't find the file offset"))? as usize;
     if sym.st_size == 0 {
         unimplemented!("symbol is required");
     }
@@ -109,7 +113,7 @@ impl FormatterOutput for ColorOutput {
             Mnemonic => print!("\x1b[33m"),
             FunctionAddress => print!("\x1b[94m"),
             LabelAddress => print!("\x1b[34m"),
-            _=> print!("\x1b[0m"),
+            _ => print!("\x1b[0m"),
         }
 
         print!("{text}");
@@ -130,18 +134,17 @@ fn disassemble(elf: &Elf, bytes: &[u8], ip: u64, content: &[u8], opts: DisassOpt
     };
     let sp = SizePrint::new(container);
 
-    let mut decoder = Decoder::with_ip(
-        bitness,
-        content,
-        ip,
-        DecoderOptions::NONE
-    );
+    let mut decoder = Decoder::with_ip(bitness, content, ip, DecoderOptions::NONE);
 
-    let syms: HashMap<u64, String> = elf.syms.iter()
-        .filter_map(|sym|
-            elf.strtab.get_at(sym.st_name)
+    let syms: HashMap<u64, String> = elf
+        .syms
+        .iter()
+        .filter_map(|sym| {
+            elf.strtab
+                .get_at(sym.st_name)
                 .map(|name| (sym.st_value, name.to_owned()))
-        ).collect();
+        })
+        .collect();
 
     let sym_resolver: Box<dyn SymbolResolver> = Box::new(SymResolver {
         syms,
@@ -156,9 +159,15 @@ fn disassemble(elf: &Elf, bytes: &[u8], ip: u64, content: &[u8], opts: DisassOpt
     };
     formatter.options_mut().set_first_operand_char_index(8);
     formatter.options_mut().set_uppercase_hex(false);
-    formatter.options_mut().set_space_after_operand_separator(true);
-    formatter.options_mut().set_space_between_memory_add_operators(true);
-    formatter.options_mut().set_gas_space_after_memory_operand_comma(true);
+    formatter
+        .options_mut()
+        .set_space_after_operand_separator(true);
+    formatter
+        .options_mut()
+        .set_space_between_memory_add_operators(true);
+    formatter
+        .options_mut()
+        .set_gas_space_after_memory_operand_comma(true);
 
     let mut eh = opts.cfi.then(|| EhFnCtx::new(elf, bytes, ip)).flatten();
 
@@ -188,7 +197,8 @@ fn disassemble(elf: &Elf, bytes: &[u8], ip: u64, content: &[u8], opts: DisassOpt
         }
 
         print!(
-            "{:w$} \x1b[97m│\x1b[0m  ", "",
+            "{:w$} \x1b[97m│\x1b[0m  ",
+            "",
             w = 24usize.saturating_sub(col_w)
         );
 
@@ -224,11 +234,11 @@ impl<'a> EhFnCtx<'a> {
             },
         }));
 
-        let fde = eh.fde_for_address(
-            &base_addrs,
-            ip,
-            |section, bases, offset| section.cie_from_offset(bases, offset),
-        ).ok()?;
+        let fde = eh
+            .fde_for_address(&base_addrs, ip, |section, bases, offset| {
+                section.cie_from_offset(bases, offset)
+            })
+            .ok()?;
 
         let instr_ctx = EhInstrContext {
             cfa_reg: Register(0),
@@ -254,7 +264,7 @@ impl<'a> EhFnCtx<'a> {
         if !self.cie_shown {
             let mut iter = self.fde.cie().instructions(&self.eh, self.base_addrs);
             while let Ok(Some(instr)) = iter.next() {
-                self.print_instr(instr);
+                self.print_instr(&self.eh, instr);
             }
             self.cie_shown = true;
         }
@@ -270,23 +280,24 @@ impl<'a> EhFnCtx<'a> {
             if ip < *self.curr_loc.borrow() {
                 break;
             }
-            self.print_instr(instr);
+            self.print_instr(&self.eh, instr);
             self.instr_index += 1;
         }
     }
 
-    fn print_instr(
-        &self,
-        instr: CallFrameInstruction<EndianSlice<'a, LittleEndian>>,
-    ) {
+    fn print_instr<S, R>(&self, section: &S, instr: CallFrameInstruction<R::Offset>)
+    where
+        S: UnwindSection<R>,
+        R: Reader,
+    {
         match instr {
             CallFrameInstruction::Nop => (),
             CallFrameInstruction::AdvanceLoc { delta } => {
                 *self.curr_loc.borrow_mut() += delta as u64;
-            },
+            }
             _ => {
                 print!("\x1b[35m[CFI]\x1b[0m ");
-                self.instr_ctx.borrow_mut().print(instr.clone());
+                self.instr_ctx.borrow_mut().print(section, instr);
             }
         }
     }
